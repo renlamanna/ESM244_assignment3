@@ -1,0 +1,156 @@
+---
+title: "Task 1"
+author: "Renee LaManna"
+date: "1/30/2022"
+output: 
+  html_document: 
+    toc: yes
+    theme: yeti
+    number_sections: no
+    code_folding: hide 
+---
+# Overview
+
+The "World Happiness Report", compiled and provided by the Sustainable Development Solutions Network is a landmark survey of the state of global happiness. This analysis uses Principal Component Analysis (PCA) to explore 7 different variables among countries and regions: happiness score (`score`), per-capita GDP, social support, the average life expectancy (`life_expectancy`), freedom to make life choices (`freedom`), generosity, and perception of corruption (`corruption`). It should be noted that the variables have no impact on the total score as the happiness score is indivudally measured through surveying. However, some of the variables can help explain why some countries have higher happiness scores than others. 
+
+**Data citation**
+Sustainable Development Solutions Network. 2015, 2019. World Happiness Report. Gallup World Poll. https://www.kaggle.com/unsdsn/world-happiness?select=2019.csv 
+
+```{r setup, include=TRUE, message=FALSE, warning=FALSE}
+# Set code chunk options and attach necessary pkgs
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+library(tidyverse)
+library(here)
+library(janitor)
+
+### For part 1, PCS:
+library(ggfortify)
+library(factoextra)
+library(FactoMineR)
+```
+
+
+```{r}
+# Read in data using here() and read_csv() and then change to lowersnake case using clean_names()
+happy <- read_csv(here("data", "2019_happy.csv")) %>% 
+  clean_names()
+
+happy_2015 <- read_csv(here("data", "2015_happy.csv")) %>% 
+  clean_names()
+```
+
+# Part 1: PCA (Principal Components Analysis) 
+ rename(city_access = accessibility_to_cities, 
+         )
+```{r}
+happy_clean <- happy %>% 
+  drop_na() %>%  # might be able to remove this drop_na
+  rename(life_expectancy = healthy_life_expectancy,
+         freedom = freedom_to_make_life_choices,
+         corruption = perceptions_of_corruption,
+         country = country_or_region)
+
+# Prepare the 2015_happy data for joining, we are joining by country so we can associate regions to country since the 2019 data does not contain region
+happy_2015_clean <- happy_2015 %>% 
+   select(country, region)
+
+ happy_regions <- happy_clean %>% 
+  full_join(happy_2015_clean) %>% 
+   drop_na() %>% 
+   mutate(region = as.factor(region))
+
+```
+
+
+
+``` {r}
+       
+# Have to get rid of anything that is not numeric, or not important to our analysis
+happy_pca <- happy_regions %>% 
+  select(score:corruption) %>% 
+  scale() %>% 
+  prcomp()
+
+
+# To look at data in console, do penguin_pca or penguin_pca$rotation 
+```
+
+
+Bi plot
+
+
+
+
+```{r}
+fviz_pca_var(happy_pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE,     # Avoid text overlapping,
+             label.vjust = 3.5,
+             legend.title = (color = "% Contribution")) + 
+  
+  labs(title = " ", x = "PC1 (54.9%)", y = "PC2 (19.8%)")
+             
+```
+
+**Figure 1** PCA of 7 different variables collected to measure happiness around the world. The colors of each vector indicate the percentage of the explained variance that is captured by each variable (contribution). The angles between each of the variables indicate their correlation to eachother. 
+ 
+ 
+ 
+```{r}
+fviz_pca_biplot(happy_pca,
+                
+                # Aesthetic changes for variables
+                col.var = "black", # Indicate variable lines as black
+                repel = TRUE,     # Avoid text overlapping,
+                label.vjust = 3, # Further adjust text to avoid their corresponding vecor
+                label ="var", # Labels for variables, but not observations
+               
+                # Aesthetic changes for observations
+                mean.point = FALSE, # Remove mean points from being included
+                geom.ind = "point", 
+                fill.ind = happy_regions$region, # Fill of points corresponding to region w/in `happy_regions` dataset
+                palette =c("yellow", "mediumaquamarine", "orangered", "mediumblue", "gold", "red", "lightskyblue", "firebrick4", "darkgreen", "darkorange"),
+                col.ind = "white", # Outline of observations is "white"
+                pointshape = 21 ,
+                pointsize = 2,
+                alpha.ind= 0.7,
+                legend.title = (color = "Region")) +
+  
+  labs(title = " ", x = "PC1 (54.9%)", y = "PC2 (19.8%)" )
+```
+
+**Figure 2.** Observations are represented by points, each of which are a country within a given region. Variables are indicated by lines (vectors)
+```{r}
+happy_pca_gdp <- happy_regions %>% 
+  select(score, social_support:corruption) %>% # Here, not including gdp, because including sliding gradient of gdp that will correspond to observations(counties)
+  scale() %>% 
+  prcomp()
+
+fviz_pca_biplot(happy_pca_gdp, 
+                
+                # Aesthetic changes for variables
+                col.var = "black",
+                repel = TRUE, # Avoid text overlapping,
+                label.vjust = 2,
+                label ="var",
+                
+                # Aesthetic changes for observations
+                mean.point = FALSE,
+                geom.ind = "point",
+                fill.ind = happy_regions$gdp_per_capita, 
+                col.ind = "white",
+                gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+                pointshape = 21 ,
+                pointsize = 2 ,
+                alpha.ind=1 ,
+                legend.title = (color = "GDP")) +
+  
+  labs(title = " ", x = "PC1 (52%)", y = "PC2 (21.9%)" )
+```
+
+**Figure 3** Observations are represented by points, each of which are individual countries. Their associated colors correspond to the per capita GDP of their country. Note that GDP was removed as a variable as it is represented within each observation in this figure. 
+
+
+# Conclusion
+
