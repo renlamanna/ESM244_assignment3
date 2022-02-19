@@ -1,0 +1,160 @@
+---
+title: "Agglomerative Hierarchical Clustering For Water Chemistry of Santa Barbara Streams"
+author: "Renee LaManna"
+date: "2/17/2022"
+output: 
+  html_document: 
+    toc: yes
+    theme: yeti
+    number_sections: no
+    code_folding: hide 
+---
+
+## Overview
+
+The data for this analysis contains stream water chemistry measurements of Santa Barbara county watersheds beginning in 2000 and continuing annually completed by the Santa Barbara Coastal LTER. Measurements were taken for the following physical variables: dissolved nitrogen (nitrate, ammonium, total dissolved nitrogen); soluble reactive phosphorus (SRP); particulate organic carbon, nitrogen and phosphorus; total suspended sediments; and conductivity. 13 different sites and 10 different physical variables are explored using agglomerative hierarchical clustering. Hierarchical clustering by both complete and single linkage are visualized using dendrograms. A tanglegram is then used to further explore the difference between single and complete linkage hierarchical clustering.
+
+**Data citation** 
+Santa Barbara Coastal LTER and J. Melack. 2019. SBC LTER: Land: Stream chemistry in the Santa Barbara Coastal drainage area, ongoing since 2000 ver 16. Environmental Data Initiative. https://doi.org/10.6073/pasta/67a558a24ceed9a0a5bf5e46ab841174 
+
+
+```{r setup, include=FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+# Set code chunk options and attach necessary pkgs
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(naniar)
+
+library(NbClust)
+library(cluster)
+library(factoextra)
+library(dendextend)
+library(ggdendro)
+```
+
+```{r}
+# Read in data using here() and read_csv() and then change to lowersnake case using clean_names()
+streams <- read_csv(here("data", "sbc_lter_registered_stream_chemistry.csv")) %>% 
+  clean_names()
+```
+
+
+## Hierarchical Clustering {.tabset .tabset-fade} 
+Hierarchical clustering by both complete and single linkage are completed to create dendrograms showing multivariate clustering for water chemistry by site.
+
+
+```{r}
+clean_streams <- streams %>% 
+  group_by(site_code) %>% 
+  replace_with_na(replace = list(x = -999.0)) %>% # Replace -999.0 values w/ NA
+  summarize( # Summarize by mean of each physical variable and remove NAs
+    mean(nh4_u_m, na.rm = FALSE),
+    mean(no3_u_m, na.rm = FALSE),
+    mean(po4_u_m, na.rm = FALSE),
+    mean(tdn_u_m, na.rm = FALSE),
+    mean(tdp_u_m, na.rm = FALSE),
+    mean(tpc_u_m, na.rm = FALSE),
+    mean(tpn_u_m, na.rm = FALSE),
+    mean(tpp_u_m, na.rm = FALSE),
+    mean(tss_mgper_liter, na.rm = FALSE),
+    mean(spec_cond_u_spercm, na.rm = FALSE))  %>% 
+  mutate(site = case_when(
+    site_code == "AB00" ~ "Arroyo Burro",
+    site_code == "AT07" ~ "Atascadero",
+    site_code == "BC02" ~ "Bell Canyon",
+    site_code == "DV01" ~ "Devereaux",
+    site_code == "GV01" ~ "Gaviota",
+    site_code == "HO00" ~ "Arroyo Hondo",
+    site_code == "MC00" ~ "Montecito St.",
+    site_code == "MC06" ~ "Rocky Nook",
+    site_code == "ON02" ~ "San Onofre",
+    site_code == "RG01" ~ "Refugio",
+    site_code == "RS02" ~ "Rattlesnake",
+    site_code == "SP02" ~ "San Pedro",
+    site_code == "TO02" ~ "Tecolote"
+  ))
+```
+
+``` {r}
+streams_scaled <- clean_streams %>% # Scale data
+  select(2:10) %>% 
+  scale()
+    
+rownames(streams_scaled) <- clean_streams$site # Site names were previously dropped, need to add back in 
+
+euc_distance <- dist(streams_scaled, method = 'euclidean', diag = TRUE, upper = TRUE)     # Calculate euclidean distance
+
+
+```
+
+### Complete dendrogram
+
+```{r}
+hc_complete <- hclust(euc_distance, method = 'complete') # Indicate complete as method
+  
+hc_complete %>% 
+  as.dendrogram() -> dend_complete # Store as dendrogram
+
+dend_complete %>%  # Customization to linkages
+  set("labels_col", value = c("skyblue", "orange", "grey"), k=3) %>%
+  set("branches_k_color", value = c("skyblue", "orange", "grey"), k = 3) %>%
+  plot(horiz=FALSE, axes=TRUE)
+abline(v = 350, lty = 2)
+
+
+```
+
+**Figure 1.** Dendrogram of hierarchical clustering by complete linkage. The sites within Santa Barbara county are listed along the x-axis and distance along the y. 3 different multivariate clusters were estimated and are specified by color. 
+
+
+### Single dendrogram
+```{r}
+hc_single <- hclust(euc_distance, method = 'single') # Indicat single as method
+
+hc_single %>% 
+  as.dendrogram() -> dend_single # Store as a dendrogram
+
+dend_single %>% 
+  set("labels_col", value = c("skyblue", "orange", "grey", "darkseagreen"), k=4) %>%
+  set("branches_k_color", value = c("skyblue", "orange", "grey", "darkseagreen"), k = 4) %>%
+  plot(horiz=FALSE, axes=TRUE)
+abline(v = 350, lty = 2)
+
+```
+
+**Figure 2.** Dendrogram of hierarchical clustering by single linkage. The sites within Santa Barbara county are listed along the x-axis and distance along the y. 4 different multivariate clusters were estimated and are specified by color. 
+
+
+### Tanglegram
+
+```{r}
+# Prepare dendrograms for tanglegram, put into list and set customizations
+dl <- dendlist(
+  dend_complete %>% 
+    set("labels_col", value = c("skyblue", "orange", "grey"), k=3) %>%
+    set("branches_lty", 1) %>%
+    set("branches_k_color", value = c("skyblue", "orange", "grey"), k = 3),
+  dend_single %>% 
+    set("labels_col", value = c("skyblue", "orange", "grey", "darkseagreen"), k=4) %>%
+    set("branches_lty", 1) %>%
+    set("branches_k_color", value = c("skyblue", "orange", "grey", "darkseagreen" ), k = 4)
+)
+
+tanglegram(dl, 
+           common_subtrees_color_lines = FALSE, 
+           highlight_distinct_edges  = TRUE, 
+           highlight_branches_lwd = FALSE,
+           margin_inner=7, # Set innter distance b/w the dendrograms and connecting lines
+           lwd = 2)
+
+```
+
+
+**Figure 3.** Tanglegram to compare hierarchical clustering by single linkage and complete linkage. The dendrogram on the left is of complete linkage and has 3 identified clusters and the dendrogram on the right is of single linkage and has 4 identified clusters. Connected lines show sub-trees which are present in both dendrograms. 
+
+
+## Conclusion
+
+Hierarchical clustering by single linkage and complete linkage show some variation in multivariate clustering. Single linkage reveals one additional cluster than complete linkage. In both single and complete linkages, multivariate clustering can be seen among some of the Santa Barbara creeks sites given the physical variables. Connected lines in figure 3 of the tanglegram also indicate some sub-trees that are present in both dendrograms.
